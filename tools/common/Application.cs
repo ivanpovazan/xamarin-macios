@@ -1536,8 +1536,6 @@ namespace Xamarin.Bundler {
 			if (enable_llvm)
 				processArguments.Add ("--llvm");
 
-			if (!llvm_only && !interp)
-				processArguments.Add ("-O=gsharedvt");
 			if (app.AotOtherArguments != null)
 				processArguments.AddRange (app.AotOtherArguments);
 			if (app.AotFloat32.HasValue)
