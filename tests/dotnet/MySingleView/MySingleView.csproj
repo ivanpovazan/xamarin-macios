@@ -9,4 +9,22 @@
 		<ApplicationVersion>3.14</ApplicationVersion>
 		<CustomBeforeMicrosoftCommonTargets>$(CustomBeforeMicrosoftCommonTargets);$(MSBuildThisFileDirectory)../../common/SupportedOSPlatformVersions.targets</CustomBeforeMicrosoftCommonTargets>
 	</PropertyGroup>
+
+	<Target Name="UpdateRuntimePackAndAOTCompiler" 
+		AfterTargets="ResolveFrameworkReferences"
+		Condition="'$(UseCurrentMainBranch)' == 'true'" >
+		<Error Condition="'$(DotnetRuntimeRepo)' == ''" Text="You must specify the location of your dotnet/runtime repository via -p:DotnetRuntimeRepo=&lt;some_repo_dir&gt;"/>
+		<ItemGroup>
+			<!-- update runtime pack to local build -->
+			<!-- <ResolvedRuntimePack PackageDirectory="$(DotnetRuntimeRepo)/artifacts/bin/microsoft.netcore.app.runtime.ios-arm64/Release"
+				Condition="'%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.NETCore.App'" /> -->
+			<!-- remove AOT compiler reference for ios-arm64 -->
+			<MonoAotCrossCompiler Remove="@(MonoAotCrossCompiler)"
+				Condition="%(RuntimeIdentifier) == 'ios-arm64'" />
+			<!-- update AOT compiler reference to local build -->
+			<MonoAotCrossCompiler Include="$(DotnetRuntimeRepo)/artifacts/bin/mono/iOS.arm64.$(Configuration)/cross/ios-arm64/mono-aot-cross">
+				<RuntimeIdentifier>ios-arm64</RuntimeIdentifier>
+			</MonoAotCrossCompiler>
+		</ItemGroup>
+	</Target>
 </Project>
