@@ -293,17 +293,17 @@ namespace Foundation {
 		}
 #endif
 
-#if !NET || !__MACOS__
+#if !NET || (!__MACOS__ && !__IOS__)
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		extern static void RegisterToggleRef (NSObject obj, IntPtr handle, bool isCustomType);
-#endif // !NET || !__MACOS__
+#endif // !NET || (!__MACOS__ && !__IOS__)
 
 		[DllImport ("__Internal")]
 		static extern void xamarin_release_managed_ref (IntPtr handle, [MarshalAs (UnmanagedType.I1)] bool user_type);
 
 		static void RegisterToggleReference (NSObject obj, IntPtr handle, bool isCustomType)
 		{
-#if NET && __MACOS__
+#if NET && (__MACOS__ || __IOS__)
 			Runtime.RegisterToggleReferenceCoreCLR (obj, handle, isCustomType);
 #else
 			RegisterToggleRef (obj, handle, isCustomType);

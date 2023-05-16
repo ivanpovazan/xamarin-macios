@@ -32,4 +32,20 @@ xamarin_bridge_call_runtime_initialize (struct InitializationOptions* options, G
 	runtime_initialize (options, exception_gchandle);
 }
 
+typedef int (*managed_entry_point)(int argc, const char* argv[]);
+
+int
+mono_jit_exec (MonoDomain * domain, MonoAssembly * assembly, int argc, const char** argv)
+{
+	void *del;
+	managed_entry_point app_main;
+
+	del = dlsym (RTLD_DEFAULT, "__managed__Main");
+	if (del == NULL)
+		xamarin_assertion_message ("mono_jit_exec: failed to load managed_entry_point: %s\n", dlerror ());
+	app_main = (managed_entry_point) del;
+
+	return app_main (argc, argv);
+}
+
 #endif // NATIVEAOT

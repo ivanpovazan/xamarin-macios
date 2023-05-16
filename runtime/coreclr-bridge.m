@@ -481,6 +481,9 @@ xamarin_bridge_compute_properties (int inputCount, const char **inputKeys, const
 bool
 xamarin_bridge_vm_initialize (int propertyCount, const char **propertyKeys, const char **propertyValues)
 {
+#if NATIVEAOT
+	return true;
+#else
 	int rv;
 
 	int combinedPropertyCount = 0;
@@ -510,6 +513,7 @@ xamarin_bridge_vm_initialize (int propertyCount, const char **propertyKeys, cons
 	LOG_CORECLR (stderr, "xamarin_vm_initialize (%i, %p, %p): rv: %i domainId: %i handle: %p\n", combinedPropertyCount, combinedPropertyKeys, combinedPropertyValues, rv, coreclr_domainId, coreclr_handle);
 
 	return rv == 0;
+#endif
 }
 
 void
@@ -556,9 +560,11 @@ xamarin_bridge_call_runtime_initialize (struct InitializationOptions* options, G
 void
 xamarin_bridge_register_product_assembly (GCHandle* exception_gchandle)
 {
+#if !defined (NATIVEAOT)
 	MonoAssembly *assembly;
 	assembly = xamarin_open_and_register (PRODUCT_DUAL_ASSEMBLY, exception_gchandle);
 	xamarin_mono_object_release (&assembly);
+#endif
 }
 
 MonoMethod *
@@ -740,6 +746,7 @@ mono_reflection_type_get_type (MonoReflectionType *reftype)
 	return rv;
 }
 
+#if !defined (NATIVEAOT)
 int
 mono_jit_exec (MonoDomain * domain, MonoAssembly * assembly, int argc, const char** argv)
 {
@@ -769,6 +776,7 @@ mono_jit_exec (MonoDomain * domain, MonoAssembly * assembly, int argc, const cha
 
 	return (int) exitCode;
 }
+#endif
 
 MonoGHashTable *
 mono_g_hash_table_new_type (GHashFunc hash_func, GEqualFunc key_equal_func, MonoGHashGCType type)

@@ -36,9 +36,19 @@ namespace Xamarin {
 				Configuration.WriteOutputForMSBuild ("_ReferencesFile", items);
 				break;
 			case SymbolMode.Linker:
-				foreach (var symbol in required_symbols) {
-					var item = new MSBuildItem ("-u" + symbol.Prefix + symbol.Name);
-					items.Add (item);
+				if (App.XamarinRuntime != XamarinRuntime.NativeAOT)
+				{
+					foreach (var symbol in required_symbols) {
+						var item = new MSBuildItem ("-u" + symbol.Prefix + symbol.Name);
+						items.Add (item);
+					}
+				}
+				else
+				{
+					// FIXME:
+					items.Add (new MSBuildItem ("-u_xamarin_objcruntime_runtime_nativeaotinitialize"));
+					items.Add (new MSBuildItem ("-u___managed__Main" ));
+					items.Add (new MSBuildItem ("-u_NativeAOT_StaticInitialization" ));
 				}
 				Configuration.WriteOutputForMSBuild ("_ReferencesLinkerFlags", items);
 				break;

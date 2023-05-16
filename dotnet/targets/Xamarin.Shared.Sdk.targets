@@ -426,6 +426,7 @@
 			_DetectAppManifest;
 			_ReadAppManifest;
 			_WriteAppManifest;
+			_ComputeManagedAssemblyToLink;
 		</_ComputeLinkerArgumentsDependsOn>
 	</PropertyGroup>
 
@@ -560,6 +561,10 @@
 			<_ExtraTrimmerArgs Condition="'$(Registrar)' == 'managed-static'">$(_ExtraTrimmerArgs) --feature ObjCRuntime.Runtime.IsManagedStaticRegistrar true</_ExtraTrimmerArgs>
 			<_ExtraTrimmerArgs Condition="'$(Registrar)' != 'managed-static'">$(_ExtraTrimmerArgs) --feature ObjCRuntime.Runtime.IsManagedStaticRegistrar false</_ExtraTrimmerArgs>
 
+			<!-- Set NativeAOT value -->
+			<_ExtraTrimmerArgs Condition="'$(_XamarinRuntime)' == 'NativeAOT'">$(_ExtraTrimmerArgs) --feature ObjCRuntime.Runtime.IsNativeAOT true</_ExtraTrimmerArgs>
+			<_ExtraTrimmerArgs Condition="'$(_XamarinRuntime)' != 'NativeAOT'">$(_ExtraTrimmerArgs) --feature ObjCRuntime.Runtime.IsNativeAOT false</_ExtraTrimmerArgs>
+
 			<!-- Enable serialization discovery. Ref: https://github.com/xamarin/xamarin-macios/issues/15676 -->
 			<_ExtraTrimmerArgs>$(_ExtraTrimmerArgs) --enable-serialization-discovery</_ExtraTrimmerArgs>
 
@@ -631,8 +636,8 @@
 			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.GenerateMainStep" />
 			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.GenerateReferencesStep" />
 			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.GatherFrameworksStep" />
-			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.Linker.ComputeNativeBuildFlagsStep" />
-			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.Linker.ComputeAOTArguments" />
+			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.Linker.ComputeNativeBuildFlagsStep" Condition="'$(_XamarinRuntime)' != 'NativeAOT'" />
+			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.Linker.ComputeAOTArguments" Condition="'$(_XamarinRuntime)' != 'NativeAOT'" />
 			<!-- Must be the last step. -->
 			<_TrimmerCustomSteps Include="$(_AdditionalTaskAssembly)" Type="Xamarin.Linker.DoneStep" />
 
@@ -783,8 +788,7 @@
 		</ItemGroup>
 	</Target>
 
-
-	<Target Name="_LoadLinkerOutput" DependsOnTargets="ComputeFilesToPublish" Condition="'$(IsMacEnabled)' == 'true'">
+	<Target Name="_LoadLinkerOutput" DependsOnTargets="_XamarinILLink;ComputeFilesToPublish" Condition="'$(IsMacEnabled)' == 'true'">
 		<!-- Load _MainFile -->
 		<ReadItemsFromFile SessionId="$(BuildSessionId)" File="$(_LinkerItemsDirectory)/_MainFile.items" Condition="Exists('$(_LinkerItemsDirectory)/_MainFile.items')">
 			<Output TaskParameter="Items" ItemName="_MainFile" />
@@ -936,7 +940,7 @@
 
 			<_AOTInputDirectory>$(_IntermediateNativeLibraryDir)aot-input/</_AOTInputDirectory>
 			<_AOTOutputDirectory>$(_IntermediateNativeLibraryDir)aot-output/</_AOTOutputDirectory>
-			<_IsDedupEnabled Condition="'$(_IsDedupEnabled)' == ''">true</_IsDedupEnabled>
+			<_IsDedupEnabled Condition="'$(_IsDedupEnabled)' == '' and '$(_XamarinRuntime)' == 'MonoVM'">true</_IsDedupEnabled>
 			<_DedupAssembly Condition="'$(_RunAotCompiler)' == 'true' And '$(IsMacEnabled)' == 'true' And '$(_IsDedupEnabled)' == 'true'">$(IntermediateOutputPath)aot-instances.dll</_DedupAssembly>
 
 			<_LibMonoLinkMode Condition="'$(_LibMonoLinkMode)' == '' And ('$(ComputedPlatform)' != 'iPhone' Or '$(_PlatformName)' == 'macOS')">dylib</_LibMonoLinkMode>
@@ -1124,6 +1128,55 @@
 		</ItemGroup>
 	</Target>
 
+	<Target Name="_XamarinILLink"
+		Inputs="@(ManagedAssemblyToLink)"
+		Outputs="@(ManagedAssemblyToLink->'$(IntermediateLinkDir)%(Filename)%(Extension)')"
+		DependsOnTargets="_RunILLink"
+		Condition="'$(_XamarinRuntime)' == 'NativeAOT'" />
+
+	<Target Name="_XamarinComputeIlcCompileInputs">
+		<PropertyGroup>
+			<_SystemModuleName>System.Private.CoreLib</_SystemModuleName>
+			<NativeLib>static</NativeLib>
+		</PropertyGroup>
+
+		<ItemGroup>
+			<TrimmerRootAssembly Remove="@(TrimmerRootAssembly)" />
+
+			<ManagedBinary Include="$(IntermediateLinkDir)$(TargetName)$(TargetExt)" />
+			<!-- Include SDK assemblies for ILC -->
+			<ManagedAssemblyReference Include="@(PrivateSdkAssemblies)" />
+			<!-- Include assemblies trimmed by ILLink with exception of SPC and application assembly -->
+			<ManagedAssemblyReference Include="@(ManagedAssemblyToLink->'$(IntermediateLinkDir)%(Filename)%(Extension)')"
+				Condition="'%(Filename)' != '$(_SystemModuleName)' and '%(Filename)' != '$(TargetName)' and Exists('$(IntermediateLinkDir)%(Filename)%(Extension)')"/>
+
+			<!-- Set inputs -->
+			<IlcCompileInput Include="@(ManagedBinary)" />
+			<IlcReference Include="@(ManagedAssemblyReference)" />
+			<DirectPInvoke Include="__Internal" />
+			<!-- Export UCO entrypoints from all assemblies, SPC is included by default -->
+			<!-- TODO: MSR could expose which assemblies need to be included in this list  -->
+			<UnmanagedEntryPointsAssembly Include="@(ManagedAssemblyReference->'%(Filename)')" Exclude="$(_SystemModuleName)" />
+
+			<!-- Set outputs -->
+			<_NativeExecutableObjectFiles Include="$(NativeObject)" />
+		</ItemGroup>
+	</Target>
+
+	<!-- Override the NativeAOT targets -->
+	<Target Name="_ComputeManagedAssemblyForILLink" Condition="'$(_XamarinRuntime)' == 'NativeAOT'" />
+	<Target Name="ComputeLinkedFilesToPublish" Condition="'$(_XamarinRuntime)' == 'NativeAOT'" />
+	<Target Name="LinkNative" Condition="'$(_XamarinRuntime)' == 'NativeAOT'" />
+	<Target Name="CopyNativeBinary" Condition="'$(_XamarinRuntime)' == 'NativeAOT'" />
+
+	<Target Name="_ExcludeBundlingUnusedFiles" Condition="'$(_XamarinRuntime)' == 'NativeAOT'"
+		DependsOnTargets="_GetCurrentAndPriorPublishFileWrites"
+		BeforeTargets="_IncrementalCleanPublishDirectory" >
+		<ItemGroup>
+			<ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.dll' or '%(Extension)' == '.dylib'" />
+		</ItemGroup>
+	</Target>
+
 	<PropertyGroup>
 		<_GenerateBindingsDependsOn>
 			_ComputeBindingVariables;
@@ -1167,6 +1220,10 @@
 			_WriteAppManifest;
 			_ComputeNativeExecutableInputs;
 			_AOTCompile;
+		</_CompileNativeExecutableDependsOn>
+		<_CompileNativeExecutableDependsOn Condition="'$(PublishAot)' == 'true'">
+			$(_CompileNativeExecutableDependsOn);
+			IlcCompile;
 		</_CompileNativeExecutableDependsOn>
 	</PropertyGroup>
 
@@ -1213,8 +1270,14 @@
 	<Target Name="_ComputeLinkNativeExecutableInputs" Condition="'$(IsMacEnabled)' == 'true'">
 		<ItemGroup>
 			<_XamarinMainLibraries Include="$(_XamarinNativeLibraryDirectory)/$(_LibXamarinName)" />
+			<!-- Take collected static libs from ILC build integration targets -->
+			<_NativeAOTLibrary Include="@(LinkerArg)" Condition="'%(Extension)' == '.a'" />
+
 			<!-- Link with the libraries shipped with the mono runtime pack -->
-			<_XamarinMainLibraries Include="@(_MonoLibrary)" />
+			<_XamarinMainLibraries Condition="'$(_XamarinRuntime)' == 'MonoVM'" Include="@(_MonoLibrary)" />
+
+			<!-- Link with the libraries shipped with the NativeAOT runtime pack -->
+			<_XamarinMainLibraries Condition="'$(_XamarinRuntime)' == 'NativeAOT'" Include="@(_NativeAOTLibrary)" />
 
 			<!-- The frameworks we need to link with (both weakly and normally) -->
 			<_NativeExecutableFrameworks Include="@(_LinkerFrameworks)" />
@@ -1222,14 +1285,20 @@
 			<!-- CFNetwork is required by xamarin_start_wwan -->
 			<_NativeExecutableFrameworks Include="CFNetwork" Condition="'$(_PlatformName)' == 'iOS'" />
 
-			<!-- Mono requires zlib, iconv, and the "Compression framework" -->
+			<!-- Mono and NativeAOT require zlib, iconv, and the "Compression framework" -->
 			<_MainLinkerFlags Include="-lz" />
 			<_MainLinkerFlags Include="-liconv" />
 			<_MainLinkerFlags Include="-lcompression" />
 
+			<!-- NativeAOT requires setting preallocated thungs and icucore -->
+			<_MainLinkerFlags Condition="'$(_XamarinRuntime)' == 'NativeAOT'" Include="-Wl,-segprot,__THUNKS,rx,rx" />
+			<_MainLinkerFlags Condition="'$(_XamarinRuntime)' == 'NativeAOT'" Include="-licucore" />
+
 			<!-- Here we must add all the files that should make us (re-)link the executable -->
 			<_LinkNativeExecutableInputs Include="@(_NativeExecutableObjectFiles)" />
 			<_LinkNativeExecutableInputs Include="@(_XamarinMainLibraries)" />
+			<_FileNativeReference Remove="@(_FileNativeReference)" />
+			<_FileNativeReference Include="@(NativeLibrary)" />
 			<_LinkNativeExecutableInputs Include="@(_FileNativeReference)" />
 		</ItemGroup>
 	</Target>
@@ -1477,7 +1546,7 @@
 				Condition=" '$(_PlatformName)' != 'macOS' And
 				            '$(InvariantGlobalization)' != 'true' And
 				            '%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == '$(_GlobalizationDataFile)' And
-				            '%(ResolvedFileToPublish.NuGetPackageId)' == '$(_MonoNugetPackageId)'
+				            ('%(ResolvedFileToPublish.NuGetPackageId)' == '$(_MonoNugetPackageId)' or '$(_XamarinRuntime)' == 'NativeAOT')
 				            "
 				PublishFolderType="Assembly"
 			/>

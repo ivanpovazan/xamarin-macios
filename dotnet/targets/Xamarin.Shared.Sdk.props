@@ -52,6 +52,13 @@
 		<_IsTrimmingEnabled>true</_IsTrimmingEnabled>
 		<!-- The GRCF property is contingent upon the HasRuntimeOutput property, which is only defined for executable projects. So, explicitly define GRCF for extension projects to avoid warnings at build time. -->
 		<GenerateRuntimeConfigurationFiles Condition="'$(IsAppExtension)' == 'true'">true</GenerateRuntimeConfigurationFiles>
+
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(PublishAot)' == 'true'" >
+		<IlcKeepManagedDebuggerSupport Condition=''>true</IlcKeepManagedDebuggerSupport>
+		<IlcCompileDependsOn>SetupOSSpecificProps;PrepareForILLink;_XamarinComputeIlcCompileInputs</IlcCompileDependsOn>
+		<CustomNativeMain>true</CustomNativeMain>
 	</PropertyGroup>
 
 	<!-- Set the default RuntimeIdentifier if not already specified. -->

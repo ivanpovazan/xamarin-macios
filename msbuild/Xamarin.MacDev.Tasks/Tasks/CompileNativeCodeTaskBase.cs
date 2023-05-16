@@ -43,6 +43,8 @@ namespace Xamarin.MacDev.Tasks {
 				arguments.Add ("clang");
 				arguments.Add ("-g");
 
+				arguments.Add ("-D CORECLR_RUNTIME");
+
 				var arch = info.GetMetadata ("Arch");
 
 				switch (Platform) {

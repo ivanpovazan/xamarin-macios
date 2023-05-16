@@ -1481,6 +1481,8 @@ namespace Xamarin.Bundler {
 		public bool IsAOTCompiled (string assembly)
 		{
 #if NET
+			if (XamarinRuntime == XamarinRuntime.NativeAOT)
+				return true;
 			if (Platform == ApplePlatform.MacOSX)
 				return false; // AOT on .NET for macOS hasn't been implemented yet.
 #else

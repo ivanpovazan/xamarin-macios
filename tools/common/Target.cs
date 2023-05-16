@@ -689,7 +689,7 @@ namespace Xamarin.Bundler {
 
 			register_assemblies.AppendLine ("\tGCHandle exception_gchandle = INVALID_GCHANDLE;");
 			foreach (var s in assemblies) {
-				if (!s.IsAOTCompiled)
+				if (!s.IsAOTCompiled || App.XamarinRuntime == XamarinRuntime.NativeAOT)
 					continue;
 
 				var info = s.AssemblyDefinition.Name.Name;
@@ -797,7 +797,7 @@ namespace Xamarin.Bundler {
 				} else {
 					sw.WriteLine ("\tmono_jit_set_aot_mode (MONO_AOT_MODE_INTERP);");
 				}
-			} else if (app.IsDeviceBuild) {
+			} else if (app.IsDeviceBuild && App.XamarinRuntime == XamarinRuntime.MonoVM) {
 				sw.WriteLine ("\tmono_jit_set_aot_mode (MONO_AOT_MODE_FULL);");
 			} else if (app.Platform == ApplePlatform.MacCatalyst && ((abi & Abi.ARM64) == Abi.ARM64)) {
 				sw.WriteLine ("\tmono_jit_set_aot_mode (MONO_AOT_MODE_FULL);");
