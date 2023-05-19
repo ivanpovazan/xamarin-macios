@@ -1292,7 +1292,7 @@
 
 			<!-- NativeAOT requires setting preallocated thungs and icucore -->
 			<_MainLinkerFlags Condition="'$(_XamarinRuntime)' == 'NativeAOT'" Include="-Wl,-segprot,__THUNKS,rx,rx" />
-			<_MainLinkerFlags Condition="'$(_XamarinRuntime)' == 'NativeAOT'" Include="-licucore" />
+			<_MainLinkerFlags Condition="'$(_XamarinRuntime)' == 'NativeAOT' and '$(InvariantGlobalization)' != 'true'" Include="-licucore" />
 
 			<!-- Here we must add all the files that should make us (re-)link the executable -->
 			<_LinkNativeExecutableInputs Include="@(_NativeExecutableObjectFiles)" />
